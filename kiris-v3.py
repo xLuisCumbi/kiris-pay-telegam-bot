@@ -120,7 +120,7 @@ def handle_message(update: Update, context):
         keyboard = [[InlineKeyboardButton("Sí", callback_data='yes'),
                      InlineKeyboardButton("No", callback_data='no')]]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        context.bot.send_message(chat_id=update.effective_chat.id, text=f"Has proporcionado el hash: {transaction_hash}.\n ¿Es correcto?", reply_markup=reply_markup)
+        context.bot.send_message(chat_id=update.effective_chat.id, text=f"Has proporcionado el hash: {transaction_hash}\n ¿Es correcto?", reply_markup=reply_markup)
         state = "AWAITING_HASH_CONFIRMATION"
 
 def button(update: Update, context):
