@@ -1,0 +1,183 @@
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters, CallbackContext
+from woocommerce import API
+import qrcode
+import os
+import pandas as pd
+
+# WooCommerce API setup
+# Set up WooCommerce API
+wcapi = API(
+    url="https://kiris.store/",  # Your store URL
+    consumer_key="ck_366d9d2529f32032020609db6f007d6c5dfa9f0c",  # Your consumer key
+    consumer_secret="cs_6a5eaeefb8aa0236441c537f73e08aaf7d4c0ed8",  # Your consumer secret
+    version="wc/v3"  # WooCommerce API version
+)
+
+# Define your wallet addresses here
+wallet_addresses = {
+    # 'BTC': 'bc1qcd22l6020zd94uw0jqldgr9gfeem2rumdln29g',
+    'ETH': '0xcfDc5748B125d232CC53A860B5c9aAc1F9651806',
+    'TRON': 'TJusTVDXo2qeq3LgfNAbKjpwmpA5vgeksU',
+}
+
+# Telegram setup
+updater = Updater(token='6168792661:AAFKkqFOEIIc0FOrj52V627ctn-W7cGd-GQ', use_context=True)
+dispatcher = updater.dispatcher
+
+#Gloabl Variables
+order_number = None
+crypto_choice = None
+transaction_hash = None
+state = None
+total_with_commission = None
+
+# Get the TRM from goverment data
+def get_trm():
+    url = "https://www.datos.gov.co/resource/mcec-87by.csv"
+    df = pd.read_csv(url)
+    trm = df.iloc[0, 0]
+    return trm
+
+# Convert to USD the amount of the order
+def convert_to_usd(amount_cop):
+    trm = float(get_trm())
+    amount_usd = float(amount_cop) / trm
+    return round(amount_usd)
+
+def start(update: Update, context: CallbackContext):
+    global state
+    state = "AWAITING_ORDER_NUMBER"
+
+    # Check if the start command has any arguments
+    if len(context.args) > 0:
+        order_number = context.args[0]  # Extract the order number from the arguments
+        # Process the order number as needed
+        context.bot.send_message(chat_id=update.effective_chat.id, text=f"Numero de orden: {order_number}")
+        print(f"Order number from request: {order_number}")  # Order number from request
+    else:
+        context.bot.send_message(chat_id=update.effective_chat.id, text="Hola, ¿cuál es tu número de orden?")
+
+def handle_message(update: Update, context):
+    global order_number, state, transaction_hash, total_with_commission
+    if state == "AWAITING_ORDER_NUMBER":
+        order_number = update.message.text
+        order = wcapi.get(f"orders/{order_number}").json()
+
+        order_status     = order.get('status')
+        order_total      = order.get('total') # Total in COP
+        order_items      = order.get('line_items')
+        meta_data        = order.get('meta_data', [])
+
+        bot_fields_exist = any(meta.get('key') == 'Tx Hash' or meta.get('key') == 'Network' for meta in meta_data)
+        if bot_fields_exist:
+            context.bot.send_message(chat_id=update.effective_chat.id, text="No es posible actualizar la transacción a través del bot. Por favor, contáctanos en https://kiris.store para resolver tu problema.")
+            state = None
+            return
+
+        items_text = ""
+        for item in order_items:
+            items_text += f"{item.get('quantity')}x {item.get('name')}\n"
+
+        context.bot.send_message(chat_id=update.effective_chat.id, text=f"Detalles de la orden:\nEstado: {order_status}\nTotal: {order_total}\nArtículos:\n{items_text}")
+
+        # Obtener el valor de TRM
+        trm_value = get_trm()
+
+        # Convertir el total de COP a USD
+        order_total_usd = convert_to_usd(order_total)
+
+        # Calcular el total a pagar con un 5% de comisión
+        total_with_commission = round( order_total_usd * 1.05 )
+
+        message = f"Total a pagar: ${total_with_commission:.2f} USDT\n\nPor favor, ten en cuenta que sólo aceptamos USDT o USDC. En caso de recibir un token diferente, el mismo será devuelto a su billetera por nuestro equipo.\n\nEl precio actual del dólar en COP es {trm_value}. Se ha agregado una porcentaje mínimo de comisión al monto total para cubrir los costos de utilizar la pasarela."
+
+        # Enviar el mensaje al usuario
+        context.bot.send_message(chat_id=update.effective_chat.id, text=message)
+
+        keyboard = [[
+                     #InlineKeyboardButton("BTC", callback_data='BTC'),
+                     InlineKeyboardButton("TRON (TRC20)", callback_data='TRON'),
+                     InlineKeyboardButton("ETH (ERC20)", callback_data='ETH')]]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        update.message.reply_text('Por favor elige la red por la que desea hacer el pago:', reply_markup=reply_markup)
+        state = "AWAITING_CRYPTO_CHOICE"
+    elif state == "AWAITING_TRANSACTION_HASH":
+        transaction_hash = update.message.text
+        keyboard = [[InlineKeyboardButton("Sí", callback_data='yes'),
+                     InlineKeyboardButton("No", callback_data='no')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        context.bot.send_message(chat_id=update.effective_chat.id, text=f"Has proporcionado el hash: {transaction_hash}.\n ¿Es correcto?", reply_markup=reply_markup)
+        state = "AWAITING_HASH_CONFIRMATION"
+
+def button(update: Update, context):
+    global crypto_choice, state, transaction_hash, order_number, total_with_commission
+    query = update.callback_query
+    if state == "AWAITING_CRYPTO_CHOICE":
+        crypto_choice = query.data
+        wallet_address = wallet_addresses[crypto_choice]
+
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(wallet_address)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill='black', back_color='white')
+        qr_file = f"{crypto_choice}_wallet_qr.png"
+        img.save(qr_file)
+
+        context.bot.send_photo(chat_id=update.effective_chat.id, photo=open(qr_file, 'rb'))
+        os.remove(qr_file)
+
+        context.bot.send_message(chat_id=update.effective_chat.id, text=f"Has seleccionado: {crypto_choice}.")
+        context.bot.send_message(chat_id=update.effective_chat.id, text=f"La dirección de la billetera es: ")
+        context.bot.send_message(chat_id=update.effective_chat.id, text=f"{wallet_address}")
+        context.bot.send_message(chat_id=update.effective_chat.id, text=f"El total a pagar es: ${total_with_commission} USDT")
+        context.bot.send_message(chat_id=update.effective_chat.id, text=f"Por favor realiza el pago y envíanos el hash de la transacción en forma de texto por este medio, se actualizará tu orden y verificaremos tu pago, en caso de tener alguna duda, comunícate con nosotros en https://kiris.store")
+
+        state = "AWAITING_TRANSACTION_HASH"
+    elif state == "AWAITING_HASH_CONFIRMATION":
+        if query.data == 'yes':
+            data = {
+                "meta_data": [
+                    {
+                        "key": "txn_hash",
+                        "value": transaction_hash
+                    },
+                    {
+                        "key": "network",
+                        "value": crypto_choice
+                    }
+                ]
+            }
+
+            response = wcapi.put(f"orders/{order_number}", data).json()
+
+            if 'id' in response:  # Check if the order was updated successfully
+                context.bot.send_message(chat_id=update.effective_chat.id, text="La orden se ha actualizado con éxito.")
+            else:
+                context.bot.send_message(chat_id=update.effective_chat.id, text="Hubo un problema al actualizar la orden.")
+
+            context.bot.send_message(chat_id=update.effective_chat.id, text="Gracias por tu información. Tu orden ha sido actualzada, pronto recibirá un email con el estado de su peddo \n ¡Hasta luego!")
+            state = None
+        else:
+            transaction_hash = None
+            context.bot.send_message(chat_id=update.effective_chat.id, text="Por favor, proporciona nuevamente el hash de la transacción.")
+            state = "AWAITING_TRANSACTION_HASH"
+
+start_handler = CommandHandler('start', start)
+dispatcher.add_handler(start_handler)
+
+message_handler = MessageHandler(Filters.text & (~Filters.command), handle_message)
+dispatcher.add_handler(message_handler)
+
+button_handler = CallbackQueryHandler(button)
+dispatcher.add_handler(button_handler)
+
+updater.start_polling()
