@@ -4,25 +4,36 @@ from woocommerce import API
 import qrcode
 import os
 import pandas as pd
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+API_URL=os.getenv('API_URL', '')
+API_CONSUMER_KEY=os.getenv('API_CONSUMER_KEY', '')
+API_CONSUMER_SECRET=os.getenv('API_CONSUMER_SECRET', '')
+WALLET_ADDRESS_ETH=os.getenv('WALLET_ADDRESS_ETH', '')
+WALLET_ADDRESS_TRON=os.getenv('WALLET_ADDRESS_TRON', '')
+TELEGRAM_BOT_TOKEN=os.getenv('TELEGRAM_BOT_TOKEN', '')
 
 # WooCommerce API setup
 # Set up WooCommerce API
 wcapi = API(
-    url="https://kiris.store/",  # Your store URL
-    consumer_key="ck_366d9d2529f32032020609db6f007d6c5dfa9f0c",  # Your consumer key
-    consumer_secret="cs_6a5eaeefb8aa0236441c537f73e08aaf7d4c0ed8",  # Your consumer secret
+    url=API_URL,  # Your store URL
+    consumer_key=API_CONSUMER_KEY,  # Your consumer key
+    consumer_secret=API_CONSUMER_SECRET,  # Your consumer secret
     version="wc/v3"  # WooCommerce API version
 )
 
 # Define your wallet addresses here
 wallet_addresses = {
     # 'BTC': 'bc1qcd22l6020zd94uw0jqldgr9gfeem2rumdln29g',
-    'ETH': '0xcfDc5748B125d232CC53A860B5c9aAc1F9651806',
-    'TRON': 'TJusTVDXo2qeq3LgfNAbKjpwmpA5vgeksU',
+    'ETH': WALLET_ADDRESS_ETH,
+    'TRON': WALLET_ADDRESS_TRON,
 }
 
 # Telegram setup
-updater = Updater(token='6168792661:AAFKkqFOEIIc0FOrj52V627ctn-W7cGd-GQ', use_context=True)
+updater = Updater(token=TELEGRAM_BOT_TOKEN, use_context=True)
 dispatcher = updater.dispatcher
 
 #Gloabl Variables
