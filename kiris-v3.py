@@ -74,21 +74,21 @@ def handle_message(update: Update, context):
     if state == "AWAITING_ORDER_NUMBER":
         order_number = update.message.text
         order_response = wcapi.get(f"orders/{order_number}")
-        print(f"order response: {order_response}")
+        # print(f"order response: {order_response}")
 
         if order_response.status_code == 404:
             context.bot.send_message(chat_id=update.effective_chat.id, text="La orden no ha sido encontrada. Por favor, ingresa nuevamente el número de orden.")
             return
 
         order = order_response.json()
-        print(f"order: {order}")
+        # print(f"order: {order}")
 
         order_status     = order.get('status')
         order_total      = order.get('total') # Total in COP
         order_items      = order.get('line_items')
         meta_data        = order.get('meta_data', [])
 
-        print(f"meta_data: {meta_data}")
+        # print(f"meta_data: {meta_data}")
 
 
         bot_fields_exist = any(meta.get('key') == 'txn_hash' or meta.get('key') == 'network' for meta in meta_data)
@@ -182,7 +182,7 @@ def button(update: Update, context):
 
             response = wcapi.put(f"orders/{order_number}", data).json()
 
-            print(f"response: {response}")  # Order number from request
+            # print(f"response: {response}")  # Order number from request
 
             if 'id' in response:  # Check if the order was updated successfully
                 context.bot.send_message(chat_id=update.effective_chat.id, text="La orden se ha actualizado con éxito.")
