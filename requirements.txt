@@ -3,3 +3,6 @@ woocommerce
 qrcode
 pandas
 python-dotenv
+babel
+datetime
+openpyxl

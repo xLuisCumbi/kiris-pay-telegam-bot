@@ -1,11 +1,14 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters, CallbackContext
 from woocommerce import API
+from dotenv import load_dotenv
 import qrcode
 import os
 import pandas as pd
-from dotenv import load_dotenv
+import datetime
+from babel.numbers import format_currency
 
+# Inicio del bot
 load_dotenv()
 
 
@@ -36,12 +39,15 @@ wallet_addresses = {
 updater = Updater(token=TELEGRAM_BOT_TOKEN, use_context=True)
 dispatcher = updater.dispatcher
 
-#Gloabl Variables
+# Global Variables
 order_number = None
 crypto_choice = None
 transaction_hash = None
 state = None
 total_with_commission = None
+order_total = None
+trm_value = None
+order_total_usd = None
 
 # Get the TRM from goverment data
 def get_trm():
@@ -70,7 +76,7 @@ def start(update: Update, context: CallbackContext):
         context.bot.send_message(chat_id=update.effective_chat.id, text="Hola, ¿cuál es tu número de orden?")
 
 def handle_message(update: Update, context):
-    global order_number, state, transaction_hash, total_with_commission
+    global order_number, state, transaction_hash, total_with_commission, crypto_choice, order_total, trm_value, order_total_usd
     if state == "AWAITING_ORDER_NUMBER":
         order_number = update.message.text
         order_response = wcapi.get(f"orders/{order_number}")
@@ -83,13 +89,13 @@ def handle_message(update: Update, context):
         order = order_response.json()
         # print(f"order: {order}")
 
-        order_status     = order.get('status')
-        order_total      = order.get('total') # Total in COP
-        order_items      = order.get('line_items')
-        meta_data        = order.get('meta_data', [])
+        order_status          = order.get('status')
+        order_total           = order.get('total') # Total in COP
+        order_items           = order.get('line_items')
+        meta_data             = order.get('meta_data', [])
+        order_total_formatted = format_currency(order_total, 'COP', locale='es_CO')
 
         # print(f"meta_data: {meta_data}")
-
 
         bot_fields_exist = any(meta.get('key') == 'txn_hash' or meta.get('key') == 'network' for meta in meta_data)
         if bot_fields_exist:
@@ -102,7 +108,7 @@ def handle_message(update: Update, context):
         for item in order_items:
             items_text += f"{item.get('quantity')}x {item.get('name')}\n"
 
-        context.bot.send_message(chat_id=update.effective_chat.id, text=f"Detalles de la orden:\nEstado: {order_status}\nTotal: {order_total}\nArtículos:\n{items_text}")
+        context.bot.send_message(chat_id=update.effective_chat.id, text=f"Detalles de la orden:\nEstado: {order_status}\nTotal: {order_total_formatted}\nArtículos:\n{items_text}")
 
         # Obtener el valor de TRM
         trm_value = get_trm()
@@ -136,7 +142,7 @@ def handle_message(update: Update, context):
         state = "AWAITING_HASH_CONFIRMATION"
 
 def button(update: Update, context):
-    global crypto_choice, state, transaction_hash, order_number, total_with_commission
+    global order_number, state, transaction_hash, total_with_commission, crypto_choice, order_total, trm_value, order_total_usd
     query = update.callback_query
     if state == "AWAITING_CRYPTO_CHOICE":
         crypto_choice = query.data
@@ -167,6 +173,25 @@ def button(update: Update, context):
         state = "AWAITING_TRANSACTION_HASH"
     elif state == "AWAITING_HASH_CONFIRMATION":
         if query.data == 'yes':
+            # Guardar la información en un archivo Excel
+            data = {
+                "date": datetime.datetime.now(),
+                "API_URL": API_URL,
+                "order": order_number,
+                "order_total": order_total,
+                "TRM": trm_value,
+                "order_total_usd": order_total_usd,
+                "total_with_commission": total_with_commission,
+                "txn_hash": transaction_hash,
+                "network": crypto_choice
+            }
+
+            df = pd.DataFrame(data, index=[0])
+
+            excel_file = "order_info.xlsx"
+            df.to_excel(excel_file, index=False, sheet_name="Order Info")
+            print(f"La información se ha guardado en el archivo: {excel_file}")
+
             data = {
                 "meta_data": [
                     {
