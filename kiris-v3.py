@@ -61,7 +61,7 @@ def start(update: Update, context: CallbackContext):
     state = "AWAITING_ORDER_NUMBER"
 
     # Check if the start command has any arguments
-    if len(context.args) > 0:
+    if context.args and len(context.args) > 0:
         order_number = context.args[0]  # Extract the order number from the arguments
         # Process the order number as needed
         context.bot.send_message(chat_id=update.effective_chat.id, text=f"Numero de orden: {order_number}")
@@ -73,17 +73,29 @@ def handle_message(update: Update, context):
     global order_number, state, transaction_hash, total_with_commission
     if state == "AWAITING_ORDER_NUMBER":
         order_number = update.message.text
-        order = wcapi.get(f"orders/{order_number}").json()
+        order_response = wcapi.get(f"orders/{order_number}")
+        print(f"order response: {order_response}")
+
+        if order_response.status_code == 404:
+            context.bot.send_message(chat_id=update.effective_chat.id, text="La orden no ha sido encontrada. Por favor, ingresa nuevamente el número de orden.")
+            return
+
+        order = order_response.json()
+        print(f"order: {order}")
 
         order_status     = order.get('status')
         order_total      = order.get('total') # Total in COP
         order_items      = order.get('line_items')
         meta_data        = order.get('meta_data', [])
 
-        bot_fields_exist = any(meta.get('key') == 'Tx Hash' or meta.get('key') == 'Network' for meta in meta_data)
+        print(f"meta_data: {meta_data}")
+
+
+        bot_fields_exist = any(meta.get('key') == 'txn_hash' or meta.get('key') == 'network' for meta in meta_data)
         if bot_fields_exist:
-            context.bot.send_message(chat_id=update.effective_chat.id, text="No es posible actualizar la transacción a través del bot. Por favor, contáctanos en https://kiris.store para resolver tu problema.")
+            context.bot.send_message(chat_id=update.effective_chat.id, text="No es posible actualizar la transacción a través del bot. Por favor, contáctanos en https://kiris.store para resolver tu problema, puede corregir su número de orden a continuación")
             state = None
+            start(update, context)  # Restart the bot by calling the start() function
             return
 
         items_text = ""
@@ -101,7 +113,7 @@ def handle_message(update: Update, context):
         # Calcular el total a pagar con un 5% de comisión
         total_with_commission = round( order_total_usd * 1.05 )
 
-        message = f"Total a pagar: ${total_with_commission:.2f} USDT\n\nPor favor, ten en cuenta que sólo aceptamos USDT o USDC. En caso de recibir un token diferente, el mismo será devuelto a su billetera por nuestro equipo.\n\nEl precio actual del dólar en COP es {trm_value}. Se ha agregado una porcentaje mínimo de comisión al monto total para cubrir los costos de utilizar la pasarela."
+        message = f"Total a pagar: ${total_with_commission:.2f} USDT\n\nPor favor, ten en cuenta que sólo aceptamos USDT o USDC. NO ENVIAR UN TOKEN DIFERENTE.\n\nEl precio actual del dólar en COP es {trm_value}. Se ha agregado una porcentaje mínimo de comisión al monto total para cubrir los costos de monetización."
 
         # Enviar el mensaje al usuario
         context.bot.send_message(chat_id=update.effective_chat.id, text=message)
@@ -170,19 +182,21 @@ def button(update: Update, context):
 
             response = wcapi.put(f"orders/{order_number}", data).json()
 
+            print(f"response: {response}")  # Order number from request
+
             if 'id' in response:  # Check if the order was updated successfully
                 context.bot.send_message(chat_id=update.effective_chat.id, text="La orden se ha actualizado con éxito.")
             else:
                 context.bot.send_message(chat_id=update.effective_chat.id, text="Hubo un problema al actualizar la orden.")
 
-            context.bot.send_message(chat_id=update.effective_chat.id, text="Gracias por tu información. Tu orden ha sido actualzada, pronto recibirá un email con el estado de su peddo \n ¡Hasta luego!")
+            context.bot.send_message(chat_id=update.effective_chat.id, text="Gracias por tu información. Tu orden ha sido actualizada, pronto recibirá un email con el estado de su pedido \n ¡Hasta luego!")
             state = None
         else:
             transaction_hash = None
             context.bot.send_message(chat_id=update.effective_chat.id, text="Por favor, proporciona nuevamente el hash de la transacción.")
             state = "AWAITING_TRANSACTION_HASH"
 
-start_handler = CommandHandler('start', start)
+start_handler = CommandHandler('pagar', start)
 dispatcher.add_handler(start_handler)
 
 message_handler = MessageHandler(Filters.text & (~Filters.command), handle_message)
