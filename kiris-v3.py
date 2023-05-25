@@ -18,6 +18,7 @@ API_CONSUMER_SECRET=os.getenv('API_CONSUMER_SECRET', '')
 WALLET_ADDRESS_ETH=os.getenv('WALLET_ADDRESS_ETH', '')
 WALLET_ADDRESS_TRON=os.getenv('WALLET_ADDRESS_TRON', '')
 TELEGRAM_BOT_TOKEN=os.getenv('TELEGRAM_BOT_TOKEN', '')
+COMMISSION_VALUE=os.getenv('COMMISSION_VALUE', '')
 
 # WooCommerce API setup
 # Set up WooCommerce API
@@ -117,7 +118,8 @@ def handle_message(update: Update, context):
         order_total_usd = convert_to_usd(order_total)
 
         # Calcular el total a pagar con un 5% de comisión
-        total_with_commission = round( order_total_usd * 1.05 )
+        commission_decimal = float(COMMISSION_VALUE) / 100  # Convertir el valor a decimal
+        total_with_commission = round(order_total_usd * (1 + commission_decimal), 2)
 
         message = f"Total a pagar: ${total_with_commission:.2f} USDT\n\nPor favor, ten en cuenta que sólo aceptamos USDT o USDC. NO ENVIAR UN TOKEN DIFERENTE.\n\nEl precio actual del dólar en COP es {trm_value}. Se ha agregado una porcentaje mínimo de comisión al monto total para cubrir los costos de monetización."
 
