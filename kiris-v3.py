@@ -6,6 +6,7 @@ import qrcode
 import os
 import pandas as pd
 import datetime
+import math
 from babel.numbers import format_currency
 
 # Inicio del bot
@@ -91,6 +92,10 @@ def handle_message(update: Update, context):
         # print(f"order: {order}")
 
         order_status          = order.get('status')
+        if order_status != 'pending':
+            context.bot.send_message(chat_id=update.effective_chat.id, text=f"La orden ya fue actualizada, estado de la orden: {order_status}.")
+            return
+
         order_total           = order.get('total') # Total in COP
         order_items           = order.get('line_items')
         meta_data             = order.get('meta_data', [])
@@ -110,6 +115,7 @@ def handle_message(update: Update, context):
             items_text += f"{item.get('quantity')}x {item.get('name')}\n"
 
         context.bot.send_message(chat_id=update.effective_chat.id, text=f"Detalles de la orden:\nEstado: {order_status}\nTotal: {order_total_formatted}\nArtículos:\n{items_text}")
+        context.bot.send_message(chat_id=update.effective_chat.id, text=f"Un momento...")
 
         # Obtener el valor de TRM
         trm_value = get_trm()
@@ -119,7 +125,7 @@ def handle_message(update: Update, context):
 
         # Calcular el total a pagar con un 5% de comisión
         commission_decimal = float(COMMISSION_VALUE) / 100  # Convertir el valor a decimal
-        total_with_commission = round(order_total_usd * (1 + commission_decimal), 2)
+        total_with_commission = math.ceil(round(order_total_usd * (1 + commission_decimal), 2))
 
         message = f"Total a pagar: ${total_with_commission:.2f} USDT\n\nPor favor, ten en cuenta que sólo aceptamos USDT o USDC. NO ENVIAR UN TOKEN DIFERENTE.\n\nEl precio actual del dólar en COP es {trm_value}. Se ha agregado una porcentaje mínimo de comisión al monto total para cubrir los costos de monetización."
 
@@ -195,6 +201,7 @@ def button(update: Update, context):
             print(f"La información se ha guardado en el archivo: {excel_file}")
 
             data = {
+                "status": "on-hold",
                 "meta_data": [
                     {
                         "key": "txn_hash",
