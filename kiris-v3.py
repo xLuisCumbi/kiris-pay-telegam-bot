@@ -8,6 +8,9 @@ import pandas as pd
 import datetime
 import math
 from babel.numbers import format_currency
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+
 
 # Inicio del bot
 load_dotenv()
@@ -20,6 +23,7 @@ WALLET_ADDRESS_ETH=os.getenv('WALLET_ADDRESS_ETH', '')
 WALLET_ADDRESS_TRON=os.getenv('WALLET_ADDRESS_TRON', '')
 TELEGRAM_BOT_TOKEN=os.getenv('TELEGRAM_BOT_TOKEN', '')
 COMMISSION_VALUE=os.getenv('COMMISSION_VALUE', '')
+GSPREAD_API_KEY=os.getenv('GSPREAD_API_KEY', '')
 
 # WooCommerce API setup
 # Set up WooCommerce API
@@ -40,6 +44,15 @@ wallet_addresses = {
 # Telegram setup
 updater = Updater(token=TELEGRAM_BOT_TOKEN, use_context=True)
 dispatcher = updater.dispatcher
+
+# Google Sheets API setup
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+credentials = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+client = gspread.authorize(credentials)
+
+# Specify the Google Sheets document and worksheet
+spreadsheet_key = GSPREAD_API_KEY
+worksheet_name = "Transacciones"
 
 # Global Variables
 order_number = None
@@ -182,8 +195,8 @@ def button(update: Update, context):
     elif state == "AWAITING_HASH_CONFIRMATION":
         if query.data == 'yes':
             # Guardar la información en un archivo Excel
-            data = {
-                "date": datetime.datetime.now(),
+            order_data = {
+                "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),  # Convertir a cadena de texto
                 "API_URL": API_URL,
                 "order": order_number,
                 "order_total": order_total,
@@ -194,11 +207,14 @@ def button(update: Update, context):
                 "network": crypto_choice
             }
 
-            df = pd.DataFrame(data, index=[0])
+            # Connect to the Google Sheets document
+            sheet = client.open_by_key(spreadsheet_key)
+            worksheet = sheet.worksheet(worksheet_name)
 
-            excel_file = "order_info.xlsx"
-            df.to_excel(excel_file, index=False, sheet_name="Order Info")
-            print(f"La información se ha guardado en el archivo: {excel_file}")
+            # Append the order data to the worksheet
+            worksheet.append_row(list(order_data.values()))
+
+            print(f"La información se ha guardado en el archivo: {sheet}")
 
             data = {
                 "status": "on-hold",
