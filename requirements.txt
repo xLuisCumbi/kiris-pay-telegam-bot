@@ -6,6 +6,5 @@ python-dotenv
 babel
 datetime
 openpyxl
-math
 gspread
 oauth2client
