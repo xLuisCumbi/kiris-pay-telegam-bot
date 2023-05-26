@@ -7,6 +7,7 @@ import os
 import pandas as pd
 import datetime
 import math
+import requests
 from babel.numbers import format_currency
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
@@ -66,9 +67,10 @@ order_total_usd = None
 
 # Get the TRM from goverment data
 def get_trm():
-    url = "https://www.datos.gov.co/resource/mcec-87by.csv"
-    df = pd.read_csv(url)
-    trm = df.iloc[0, 0]
+    url = "https://www.datos.gov.co/resource/mcec-87by.json"
+    response = requests.get(url)
+    data = response.json()
+    trm = data[0]["valor"]
     return trm
 
 # Convert to USD the amount of the order
