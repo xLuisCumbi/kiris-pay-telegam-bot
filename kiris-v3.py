@@ -139,10 +139,10 @@ def handle_message(update: Update, context):
         order_total_usd = convert_to_usd(order_total)
 
         # Calcular el total a pagar con un 5% de comisión
-        commission_decimal = float(COMMISSION_VALUE) / 100  # Convertir el valor a decimal
-        total_with_commission = math.ceil(round(order_total_usd * (1 + commission_decimal), 2))
+        # commission_decimal = float(COMMISSION_VALUE) / 100  # Convertir el valor a decimal
+        # total_with_commission = math.ceil(round(order_total_usd * (1 + commission_decimal), 2))
 
-        message = f"Total a pagar: ${total_with_commission:.2f} USDT\n\nPor favor, ten en cuenta que sólo aceptamos USDT o USDC. NO ENVIAR UN TOKEN DIFERENTE.\n\nEl precio actual del dólar en COP es {trm_value}. Se ha agregado una porcentaje mínimo de comisión al monto total para cubrir los costos de monetización."
+        message = f"Total a pagar: ${order_total_usd:.2f} USDT\n\nPor favor, ten en cuenta que sólo aceptamos USDT o USDC. NO ENVIAR UN TOKEN DIFERENTE.\n\nEl precio actual del dólar en COP es {trm_value}."
 
         # Enviar el mensaje al usuario
         context.bot.send_message(chat_id=update.effective_chat.id, text=message)
@@ -190,7 +190,7 @@ def button(update: Update, context):
         context.bot.send_message(chat_id=update.effective_chat.id, text=f"Has seleccionado: {crypto_choice}.")
         context.bot.send_message(chat_id=update.effective_chat.id, text=f"La dirección de la billetera es: ")
         context.bot.send_message(chat_id=update.effective_chat.id, text=f"{wallet_address}")
-        context.bot.send_message(chat_id=update.effective_chat.id, text=f"El total a pagar es: ${total_with_commission} USDT")
+        context.bot.send_message(chat_id=update.effective_chat.id, text=f"El total a pagar es: ${order_total_usd} USDT")
         context.bot.send_message(chat_id=update.effective_chat.id, text=f"Por favor realiza el pago y envíanos el hash de la transacción en forma de texto por este medio, se actualizará tu orden y verificaremos tu pago, en caso de tener alguna duda, comunícate con nosotros en https://kiris.store")
 
         state = "AWAITING_TRANSACTION_HASH"
@@ -206,7 +206,8 @@ def button(update: Update, context):
                 "order_total_usd": order_total_usd,
                 "total_with_commission": total_with_commission,
                 "txn_hash": transaction_hash,
-                "network": crypto_choice
+                "network": crypto_choice,
+                "txn_status": ''
             }
 
             # Connect to the Google Sheets document
